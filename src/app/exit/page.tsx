@@ -5,10 +5,19 @@ import { useRouter } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { supabase, Item } from '@/lib/supabase'
 import { offlineQueue } from '@/lib/offline-queue'
+import { getItems, ItemOption } from '@/lib/db'
+
+interface FinishedItem {
+  id: string
+  name: string
+  base_unit?: string
+  size?: string | null
+}
 
 export default function ExitPage() {
-  const [finishedGoods, setFinishedGoods] = useState<Item[]>([])
+  const [finishedGoods, setFinishedGoods] = useState<FinishedItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -31,17 +40,22 @@ export default function ExitPage() {
 
   const loadFinishedGoods = async () => {
     try {
-      const { data, error } = await supabase
-        .from('items')
-        .select('*')
-        .eq('type', 'finished_good')
-        .eq('is_active', true)
-        .order('name')
+      setError(null)
+      
+      // Check feature flag
+      const useDbItems = process.env.NEXT_PUBLIC_USE_DB_ITEMS === 'true'
+      if (!useDbItems) {
+        setFinishedGoods([])
+        setError('Database items feature is disabled')
+        return
+      }
 
-      if (error) throw error
-      setFinishedGoods(data || [])
+      const data = await getItems({ type: 'finished', activeOnly: true })
+      setFinishedGoods(data)
     } catch (error) {
       console.error('Error loading finished goods:', error)
+      setError('Failed to load finished goods. Please try again.')
+      setFinishedGoods([])
     } finally {
       setLoading(false)
     }
@@ -150,7 +164,24 @@ export default function ExitPage() {
                 Finished Good *
               </label>
               {loading ? (
-                <div className="input-field">Loading finished goods...</div>
+                <div className="input-field bg-gray-50">Loading finished goods...</div>
+              ) : error ? (
+                <div className="space-y-2">
+                  <div className="input-field bg-red-50 text-red-700 border-red-200">
+                    {error}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadFinishedGoods}
+                    className="text-sm text-primary-600 hover:text-primary-800 underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : finishedGoods.length === 0 ? (
+                <div className="input-field bg-yellow-50 text-yellow-700 border-yellow-200">
+                  No finished goods available
+                </div>
               ) : (
                 <select
                   value={formData.itemId}
@@ -161,7 +192,7 @@ export default function ExitPage() {
                   <option value="">Select a finished good</option>
                   {finishedGoods.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} ({item.unit})
+                      {item.name}{item.base_unit && ` (${item.base_unit})`}{item.size && ` - ${item.size}`}
                     </option>
                   ))}
                 </select>
@@ -171,7 +202,7 @@ export default function ExitPage() {
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-primary-700 mb-2">
-                Quantity * {selectedItem && `(${selectedItem.unit})`}
+                Quantity *
               </label>
               <input
                 type="number"

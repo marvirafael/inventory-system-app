@@ -5,10 +5,19 @@ import { useRouter } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { supabase, Item } from '@/lib/supabase'
 import { offlineQueue } from '@/lib/offline-queue'
+import { getItems, ItemOption } from '@/lib/db'
+
+interface RawItem {
+  id: string
+  name: string
+  base_unit: string
+  size: string | null
+}
 
 export default function StoragePage() {
-  const [items, setItems] = useState<Item[]>([])
+  const [items, setItems] = useState<RawItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -31,16 +40,22 @@ export default function StoragePage() {
 
   const loadItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from('items')
-        .select('*')
-        .eq('is_active', true)
-        .order('name')
+      setError(null)
+      
+      // Check feature flag
+      const useDbItems = process.env.NEXT_PUBLIC_USE_DB_ITEMS === 'true'
+      if (!useDbItems) {
+        setItems([])
+        setError('Database items feature is disabled')
+        return
+      }
 
-      if (error) throw error
-      setItems(data || [])
+      const data = await getItems({ type: 'raw', activeOnly: true })
+      setItems(data)
     } catch (error) {
-      console.error('Error loading items:', error)
+      console.error('Error loading raw items:', error)
+      setError('Failed to load raw ingredients. Please try again.')
+      setItems([])
     } finally {
       setLoading(false)
     }
@@ -143,10 +158,27 @@ export default function StoragePage() {
             {/* Item */}
             <div>
               <label className="block text-sm font-medium text-primary-700 mb-2">
-                Item *
+                Raw Ingredient *
               </label>
               {loading ? (
-                <div className="input-field">Loading items...</div>
+                <div className="input-field bg-gray-50">Loading raw ingredients...</div>
+              ) : error ? (
+                <div className="space-y-2">
+                  <div className="input-field bg-red-50 text-red-700 border-red-200">
+                    {error}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadItems}
+                    className="text-sm text-primary-600 hover:text-primary-800 underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="input-field bg-yellow-50 text-yellow-700 border-yellow-200">
+                  No raw ingredients available
+                </div>
               ) : (
                 <select
                   value={formData.itemId}
@@ -154,10 +186,10 @@ export default function StoragePage() {
                   className="input-field"
                   required
                 >
-                  <option value="">Select an item</option>
+                  <option value="">Select a raw ingredient</option>
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} ({item.unit}) - {item.type.replace('_', ' ')}
+                      {item.name} ({item.base_unit}){item.size && ` - ${item.size}`}
                     </option>
                   ))}
                 </select>
@@ -167,7 +199,7 @@ export default function StoragePage() {
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-primary-700 mb-2">
-                Quantity * {selectedItem && `(${selectedItem.unit})`}
+                Quantity *
               </label>
               <input
                 type="number"

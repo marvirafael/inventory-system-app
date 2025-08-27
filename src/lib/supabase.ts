@@ -9,13 +9,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database types
+// Database types - Updated for unified items catalog
 export interface Item {
   id: string
   name: string
-  unit: string
-  type: 'raw_material' | 'packaging' | 'finished_good'
-  is_active: boolean
+  type: 'raw' | 'packaging' | 'finished'
+  base_unit: string
+  size: string | null
+  active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface StockOnHand {
@@ -53,14 +57,13 @@ export interface ItemMovementHistory {
 export interface Recipe {
   id: string
   fg_item_id: string
-  fg_item_name: string
   waste_pct: number
 }
 
 export interface RecipeComponent {
+  id: string
   recipe_id: string
   rm_item_id: string
-  rm_item_name: string
   qty_per_fg_unit: number
   unit: string
 }
