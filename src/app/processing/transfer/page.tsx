@@ -58,37 +58,46 @@ export default function TransferPage() {
 
     setSubmitting(true)
     try {
-      // Transfer is implemented as two ledger entries: out from source, in to destination
-      const transferData = {
-        p_item_id: formData.itemId,
-        p_qty_out: parseFloat(formData.quantity),
-        p_from_location: formData.fromLocation,
-        p_to_location: formData.toLocation,
-        p_reference: formData.reference || null,
-        p_notes: formData.notes || null,
-        p_client_uuid: crypto.randomUUID()
-      }
+      // Transfer using actual database schema
+      const selectedStock = stockData.find(item => item.item_id === formData.itemId)
+      
+      console.log('Transfer attempt:', {
+        itemId: formData.itemId,
+        quantity: formData.quantity,
+        fromLocation: formData.fromLocation,
+        toLocation: formData.toLocation,
+        selectedStock: selectedStock
+      })
 
-      // For now, we'll use direct ledger inserts since transfer RPC isn't in Module 1
-      // This would need to be implemented in the backend
-      await supabase.from('ledger').insert([
+      const transferEntries = [
         {
           item_id: formData.itemId,
+          movement_type: 'Transfer',
           qty_out: parseFloat(formData.quantity),
           location: formData.fromLocation,
           reference: formData.reference || null,
-          notes: `Transfer to ${formData.toLocation}: ${formData.notes || ''}`.trim(),
-          client_uuid: crypto.randomUUID()
+          unit: selectedStock?.base_unit || 'unit'
         },
         {
           item_id: formData.itemId,
+          movement_type: 'Transfer',
           qty_in: parseFloat(formData.quantity),
           location: formData.toLocation,
           reference: formData.reference || null,
-          notes: `Transfer from ${formData.fromLocation}: ${formData.notes || ''}`.trim(),
-          client_uuid: crypto.randomUUID()
+          unit: selectedStock?.base_unit || 'unit'
         }
-      ])
+      ]
+
+      console.log('Inserting ledger entries:', transferEntries)
+
+      const { data, error } = await supabase.from('ledger').insert(transferEntries)
+
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+
+      console.log('Transfer successful:', data)
 
       // Reset form
       setFormData({
@@ -104,7 +113,7 @@ export default function TransferPage() {
       loadStockData() // Refresh stock data
     } catch (error) {
       console.error('Error transferring inventory:', error)
-      alert('Error transferring inventory. Please try again.')
+      alert(`Error transferring inventory: ${error.message || 'Please try again.'}`)
     } finally {
       setSubmitting(false)
     }
