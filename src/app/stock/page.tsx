@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 interface StockByLocation {
   item_id: string
   item_name: string
-  unit: string
+  base_unit: string
   storage_qty: number
   processing_qty: number
   exit_qty: number
@@ -124,7 +124,7 @@ export default function StockPage() {
                   {stockData.map((item) => (
                     <tr key={item.item_id} className="hover:bg-primary-25">
                       <td className="px-6 py-4 font-medium text-primary-900">{item.item_name}</td>
-                      <td className="px-6 py-4 text-primary-600">{item.unit}</td>
+                      <td className="px-6 py-4 text-primary-600">{item.base_unit}</td>
                       <td className="px-6 py-4 text-right text-primary-900">
                         {item.storage_qty.toLocaleString()}
                       </td>
